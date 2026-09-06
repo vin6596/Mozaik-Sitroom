@@ -1,0 +1,18 @@
+﻿{
+  "id": "checkout-500",
+  "title": "Checkout API is throwing 500 errors",
+  "duration_ms": 20000,
+  "ticks": [
+    { "id": "tick-t0", "t_ms": 0, "source": "pager", "key": "alert", "value": "checkout_api_5xx", "summary": "PAGER: Checkout API 5xx spike. Root cause unknown." },
+    { "id": "tick-db-pool", "t_ms": 5000, "source": "metrics", "key": "db_pool_active", "value": 98, "meta": { "max": 100 }, "summary": "metrics: db_pool_active = 98/100" },
+    { "id": "tick-upstream", "t_ms": 8000, "source": "metrics", "key": "p99_latency_upstream_ms", "value": 1200, "summary": "metrics: p99_latency_upstream_ms = 1200" },
+    { "id": "tick-deploy", "t_ms": 12000, "source": "deploy", "key": "last_deploy_hash", "value": "unchanged", "meta": { "since": "06:00" }, "summary": "deploy: last_deploy_hash unchanged since 06:00" },
+    { "id": "tick-auth", "t_ms": 15000, "source": "metrics", "key": "auth_error_rate", "value": 0.42, "summary": "metrics: auth_error_rate = 0.42 (spike)" }
+  ],
+  "kills": [
+    { "when_tick_id": "tick-deploy", "specialist": "deploy", "reason": "last_deploy_hash is unchanged, so a bad recent deploy is contradicted" }
+  ],
+  "joins": [
+    { "when_tick_id": "tick-auth", "specialist": "security", "reason": "auth errors are spiking" }
+  ]
+}

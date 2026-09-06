@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>SITROOM</title>
+    <style>
+      :root {
+        font-family: "Segoe UI", system-ui, sans-serif;
+        background: #0e1116;
+        color: #e8edf4;
+      }
+      body { margin: 24px; }
+      h1 { margin: 0 0 8px; font-size: 22px; letter-spacing: 0.08em; }
+      .meta { color: #93a0b4; margin-bottom: 16px; }
+      .row { display: flex; gap: 12px; flex-wrap: wrap; }
+      .card {
+        flex: 1;
+        min-width: 220px;
+        border: 1px solid #2a3344;
+        border-radius: 12px;
+        padding: 14px;
+        background: #161b24;
+      }
+      .card.waiting { opacity: 0.55; }
+      .card.dead { background: #24181b; border-color: #6d2e38; }
+      .name { font-weight: 700; }
+      .state { display: inline-block; margin-top: 8px; font-size: 12px; letter-spacing: 0.06em; }
+      .pulse { color: #6ee7a8; }
+      .dead-label { color: #ff8a9a; }
+      .wait-label { color: #93a0b4; }
+      .theory, .why { color: #93a0b4; font-size: 13px; min-height: 36px; }
+           .stream {
+        margin-top: 10px;
+        height: 140px;
+        overflow-y: auto;
+        font-family: Consolas, "Courier New", monospace;
+        font-size: 13px;
+        line-height: 1.4;
+        white-space: pre-wrap;
+      }
+      #ticks {
+        margin-top: 16px;
+        padding: 12px;
+        border-radius: 12px;
+        background: #161b24;
+        border: 1px solid #2a3344;
+        min-height: 48px;
+        color: #c9d4e5;
+      }
+      button {
+        background: #2f6fed;
+        color: white;
+        border: 0;
+        border-radius: 8px;
+        padding: 8px 14px;
+        cursor: pointer;
+        margin-bottom: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>SITROOM</h1>
+    <div class="meta">Checkout API 500s — concurrent specialists, deterministic kill</div>
+    <button id="run">Run incident</button>
+    <div class="row">
+      <div class="card" id="card-database">
+        <div class="name">Database</div>
+        <div class="state wait-label" id="state-database">IDLE</div>
+        <div class="theory">Theory: connection pool exhaustion</div>
+        <div class="why" id="why-database"></div>
+        <div class="stream" id="stream-database"></div>
+      </div>
+      <div class="card" id="card-deploy">
+        <div class="name">Deploy</div>
+        <div class="state wait-label" id="state-deploy">IDLE</div>
+        <div class="theory">Theory: bad recent deploy</div>
+        <div class="why" id="why-deploy"></div>
+        <div class="stream" id="stream-deploy"></div>
+      </div>
+      <div class="card waiting" id="card-security">
+        <div class="name">Security</div>
+        <div class="state wait-label" id="state-security">WAITING TO BE PAGED</div>
+        <div class="theory">Theory: auth failure cascade</div>
+        <div class="why" id="why-security"></div>
+        <div class="stream" id="stream-security"></div>
+      </div>
+    </div>
+    <div id="ticks">No ticks yet.</div>
+    <script>
+      const streams = { database: "", deploy: "", security: "" }
+      let source = null
+
+      function setState(id, label, kind) {
+        const state = document.getElementById("state-" + id)
+        const card = document.getElementById("card-" + id)
+        state.textContent = label
+        state.className = "state " + kind
+        card.classList.remove("waiting", "dead")
+        if (kind === "wait-label") card.classList.add("waiting")
+        if (kind === "dead-label") card.classList.add("dead")
+      }
+
+            function addToken(id, text) {
+        streams[id] += text
+        const box = document.getElementById("stream-" + id)
+        box.textContent = streams[id]
+        box.scrollTop = box.scrollHeight
+        if (document.getElementById("card-" + id).classList.contains("dead") === false) {
+          setState(id, "LIVE", "pulse")
+        }
+      }
+
+      function handle(event) {
+        if (event.type === "incident.tick") {
+          document.getElementById("ticks").textContent = event.tick.summary
+        }
+        if (event.type === "agent.token") addToken(event.specialist, event.text)
+        if (event.type === "agent.killed") {
+          setState(event.specialist, "DEAD", "dead-label")
+          document.getElementById("why-" + event.specialist).textContent = event.reason
+        }
+        if (event.type === "agent.joined") {
+          setState(event.specialist, "PAGED IN", "pulse")
+          document.getElementById("why-" + event.specialist).textContent = event.reason
+          document.getElementById("card-" + event.specialist).classList.remove("waiting")
+        }
+      }
+
+      document.getElementById("run").onclick = function () {
+        if (source) source.close()
+        streams.database = streams.deploy = streams.security = ""
+        ;["database", "deploy", "security"].forEach(function (id) {
+          document.getElementById("stream-" + id).textContent = ""
+          document.getElementById("why-" + id).textContent = ""
+        })
+        setState("database", "IDLE", "wait-label")
+        setState("deploy", "IDLE", "wait-label")
+        setState("security", "WAITING TO BE PAGED", "wait-label")
+        document.getElementById("card-security").classList.add("waiting")
+        source = new EventSource("/events")
+        source.onmessage = function (msg) {
+          handle(JSON.parse(msg.data))
+        }
+      }
+    </script>
+  </body>
+</html>

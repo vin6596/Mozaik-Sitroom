@@ -1,0 +1,18 @@
+﻿{
+  "name": "sitroom",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "SITROOM — concurrent incident-response agents on Mozaik (JigJoy hackathon)",
+  "scripts": {
+    "start": "tsx src/cli.ts",
+    "dev": "tsx src/cli.ts --speed 4"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": { "@mozaik-ai/core": "4.0.0-beta.6" },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  }
+}
