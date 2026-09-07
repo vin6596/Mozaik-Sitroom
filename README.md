@@ -16,7 +16,7 @@ Several specialists share one incident event bus. Each keeps a private notebook.
 ## $0 stack
 
 - Local Node.js only
-- `@mozaik-ai/core@4.0.0-beta.6` (no `runInference`, no provider key)
+- `@mozaik-ai/core@4.0.0` (no `runInference`, no provider key)
 - No paid API tier
 - No paid hosting
 - Demo UI is http://127.0.0.1:8787
