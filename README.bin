@@ -1,0 +1,310 @@
+# SITROOM
+
+## Overview
+
+SITROOM is a deterministic incident-room demo built around a shared event bus, concurrent specialists, evidence landing, and a mid-token kill path.
+
+The demo starts with one outage:
+
+1. Evidence lands.
+2. Deploy starts speaking.
+3. Deploy dies mid-sentence when the deterministic kill condition is met.
+4. Security pages in on the auth spike.
+5. On replay, the kill happens while the line is still being written.
+6. The bus records the kill tombstone.
+
+The live UI uses canned speech on a timer. `kill-gate.ts` runs on the fixture tick that arrives.
+
+> **Important:** Commander is not in this build. The kill is a plain conditional, not a model decision.
+
+After a contradicted theory exists, that specialist stops emitting tokens. The bus still logs the tombstone.
+
+---
+
+## Why This Is Not a Chatbot
+
+| Chatbot | SITROOM |
+|---|---|
+| One agent, turn-taking | Two loops start on one SEV-style pager |
+| Reviewer sees a finished answer | Deploy can be cut mid-token |
+| Soft disagreement | Kill is deterministic |
+| Canned status only | Facts = landed bus events + private notebooks |
+| Human is a prompt | Human runs the UI / CLI; kill does not need a model |
+
+---
+
+## Proof of Concurrency
+
+`src/cli.ts` and `src/ui-server.ts` attach both specialists to the same bus before the fixture runs.
+
+- Database and Deploy subscribe to the same bus.
+- There is no wait between their reactions.
+- Tokens from both specialists appear in the same wall-clock second.
+
+After a live run:
+
+```text
+=== mozaik roster after run ===
+still joined: mozaik-room, database, security
+live specialists: database, security
+
+Deploy is gone. That is the leave path after kill.
+```
+
+---
+
+## Tests
+
+Run the complete test suite with:
+
+```powershell
+npx.cmd tsx --test src/kill-gate.test.ts src/specialist-kill.test.ts src/join.test.ts src/log-checks.test.ts src/mozaik-room.test.ts
+```
+
+The tests cover:
+
+- Concurrency / overlap
+- Isolation
+- Join latency
+- Replay fingerprint
+- Mozaik room map
+- Deterministic kill behavior
+- Dead-specialist token suppression
+- JSONL logging and replay
+
+---
+
+## Mozaik
+
+SITROOM depends on:
+
+```text
+@mozaik-ai/core@4.0.0-beta.6
+```
+
+Each specialist gets its own `ModelContext`.
+
+Ticks are stored as `UserMessageItems` in:
+
+```text
+src/mozaik/room.ts
+```
+
+A killed specialist is removed from the room map so its context stops receiving later ticks.
+
+### Published API Constraint
+
+Published beta.6 does **not** export:
+
+- `AgenticEnvironment`
+- `BaseParticipant`
+- `sendMessage`
+
+Those names were not invented in the running code. Isolation uses the exports that actually exist on npm.
+
+### Cost / Inference
+
+Speech does not call `runInference`.
+
+The demo stays **$0** on its demo path, and the kill remains a function in:
+
+```text
+src/kill-gate.ts
+```
+
+---
+
+## UI
+
+### Header
+
+**Checkout API 500s, concurrent specialists, deterministic kill.**
+
+### Cards
+
+- Database
+- Deploy
+- Security
+
+### States
+
+- `LIVE`
+- `DEAD`
+- `WAITING TO BE PAGED`
+
+### Stream
+
+Full transcript with scrolling.
+
+### Ticks
+
+The bottom strip displays the last landed metric.
+
+### Replay
+
+Replays the same sequence from:
+
+```text
+logs/last.jsonl
+```
+
+Replay uses no agents and no model.
+
+---
+
+## Running Locally
+
+### Requirements
+
+- Node.js 18+
+- npm
+- No API key required for the demo path
+
+### Install
+
+```powershell
+cd $HOME\sitroom
+npm.cmd install
+```
+
+### Start the Live UI
+
+```powershell
+npx.cmd tsx src/ui-server.ts
+```
+
+Then open:
+
+```text
+http://127.0.0.1:8787
+```
+
+Click **Run incident**.
+
+### CLI Live Run
+
+```powershell
+npx.cmd tsx src/cli.ts --speed 4 --log logs/last.jsonl
+```
+
+### CLI Replay
+
+```powershell
+npx.cmd tsx src/cli.ts --replay logs/last.jsonl --speed 8
+```
+
+---
+
+## Disclosure — What Is Staged
+
+### Speech Is Canned
+
+Speech consists of fixed lines emitted on a timer.
+
+It is **not an LLM**.
+
+### Kill Is Deterministic
+
+The kill does not come from a model decision.
+
+The rule is:
+
+```text
+deploy + last_deploy_hash + unchanged → kill
+else → keep talking
+```
+
+### Join Is Fixture-Driven
+
+Security pages on `tick-auth` because the fixture says so.
+
+The join implementation itself is real:
+
+```text
+attach + pageIn in the same turn
+```
+
+### Replay Is the Reliability Path
+
+The preferred demo is the live UI.
+
+If the laptop hitches, use:
+
+```powershell
+npx.cmd tsx src/cli.ts --replay logs/last.jsonl --speed 4
+```
+
+Replay reads a real engine log. It is not a hand-written tombstone script.
+
+---
+
+## What Is Not Faked
+
+The following behaviors are real:
+
+- Shared event bus
+- Isolated per-agent memory
+- Concurrent token timestamps
+- Dead agent emits zero tokens after kill
+- Late joiner starts on the join tick
+- JSONL write
+- Identical replay fingerprint
+- Per-specialist Mozaik `ModelContext`
+
+---
+
+## Project Layout
+
+```text
+src/
+├── bus.ts
+├── fixture-runner.ts
+├── specialist.ts
+├── kill-gate.ts
+├── kill-controller.ts
+├── join-controller.ts
+├── mozaik/
+│   └── room.ts
+├── jsonl.ts
+├── cli.ts
+└── ui-server.ts
+
+fixtures/
+└── incident.checkout-500.json
+
+public/
+└── sitroom.html
+
+logs/
+└── last.jsonl
+```
+
+---
+
+## Demo Order
+
+1. Make sure the tests are green.
+2. Start the UI.
+3. Let the UI warm up.
+4. Click **Run incident**.
+5. Watch the second click / run for:
+   - overlap
+   - Deploy → `DEAD`
+   - Security → `LIVE`
+6. If the laptop hitches, use replay:
+
+```powershell
+npx.cmd tsx src/cli.ts --replay logs/last.jsonl --speed 4
+```
+
+---
+
+## Quick Start
+
+```powershell
+cd $HOME\sitroom
+npm.cmd install
+npx.cmd tsx src/ui-server.ts
+```
+
+Open `http://127.0.0.1:8787` and run the incident.
